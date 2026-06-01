@@ -69,7 +69,7 @@ namespace ARCTool.FileSys
         private static List<DirectoryItemInfo> Directory_Items;
         private static List<DirectoryPathInfo> DirectoryPaths;
 
-        public class HeaderData 
+        public class HeaderData
         {
             public string Magic { get; set; }
             public int FileSize { get; set; }
@@ -81,8 +81,8 @@ namespace ARCTool.FileSys
             public int Unknown3 { get; set; }
 
             public const int HeaderSize = 0x20;
-            
-            public void Read(BinaryReader br) 
+
+            public void Read(BinaryReader br)
             {
                 Magic = CS.Byte2Char(br);
                 FileSize = CS.Byte2Int(br);
@@ -95,7 +95,7 @@ namespace ARCTool.FileSys
             }
         }
 
-        public class InformationData 
+        public class InformationData
         {
             public int NodeLength { get; set; }
             public int FirstNodeOffset { get; set; }
@@ -107,7 +107,7 @@ namespace ARCTool.FileSys
             public short Unknown4 { get; set; }
             public int Unknown5 { get; set; }
 
-            public void Read(BinaryReader br) 
+            public void Read(BinaryReader br)
             {
                 NodeLength = CS.Byte2Int(br);
                 FirstNodeOffset = CS.Byte2Int(br);
@@ -121,23 +121,23 @@ namespace ARCTool.FileSys
             }
         }
 
-        public class FileSectionDataPosition 
+        public class FileSectionDataPosition
         {
             public long BaseAddress { get; private set; }
             public long EndAddress { get; private set; }
 
-            public void Set_BaseAddress(int fileDataOffset) 
+            public void Set_BaseAddress(int fileDataOffset)
             {
                 BaseAddress = fileDataOffset + HeaderData.HeaderSize;
             }
 
-            public void Set_EndAddress(int fileDataLength_1) 
+            public void Set_EndAddress(int fileDataLength_1)
             {
                 EndAddress = BaseAddress + fileDataLength_1;
             }
         }
 
-        public class NodeInformation 
+        public class NodeInformation
         {
             public string ID { get; private set; }
             public int StringTopOffset { get; private set; }
@@ -145,7 +145,7 @@ namespace ARCTool.FileSys
             public short FolderDirectoryCount { get; private set; }
             public int FirstDirectoryIndex { get; private set; }
 
-            public static NodeInformation Read(BinaryReader br) 
+            public static NodeInformation Read(BinaryReader br)
             {
                 return new NodeInformation
                 {
@@ -158,11 +158,11 @@ namespace ARCTool.FileSys
             }
         }
 
-        public class NodeSectionData 
+        public class NodeSectionData
         {
             public List<NodeInformation> Data;
 
-            public NodeSectionData() 
+            public NodeSectionData()
             {
                 Data = new List<NodeInformation>();
             }
@@ -341,7 +341,7 @@ namespace ARCTool.FileSys
                                         DirectoryPaths.Add(thisdir);
                                         Directory.CreateDirectory(thisdir.Path);
                                     }
-                                    else 
+                                    else
                                     {
                                         //thisdir.Path = Directory.GetParent(thisdir.Path).FullName;
                                         DirectoryPaths.Add(thisdir);
@@ -453,7 +453,7 @@ namespace ARCTool.FileSys
                 var file = Directory.GetFiles(dirName, "*", SearchOption.TopDirectoryOnly).Length;
                 Console.WriteLine($"dir{dir}:file{file}");
                 if ((dir + file) < 3) {
-                    
+
                     HasTwoDepth = false;
                     break;
                 }
@@ -495,11 +495,11 @@ namespace ARCTool.FileSys
                         //Console.ReadKey();
                         HasOneDepth = true;
                         //break;
-                        
-                    } 
+
+                    }
                     continue;
                 }
-                
+
                 var ParentDirectory1Upper = Directory.GetParent(DirectoryPath.Value);
                 var ParentDirectory2Upper = Directory.GetParent(ParentDirectory1Upper.FullName);
                 bool HasDepth1 = ParentDirectory1Upper.FullName == RootDirectoryPath;
@@ -509,7 +509,7 @@ namespace ARCTool.FileSys
                     HasOneDepth = true;
                     ////break;
                 }
-                
+
 
                 Console.WriteLine(DirectoryPath.Value);
                 Console.WriteLine("↓↓↓↓↓↓↓↓↓");
@@ -587,6 +587,12 @@ namespace ARCTool.FileSys
         {
             FileStream fs = new(extractPath, FileMode.Create);
             BinaryWriter bw = new(fs);
+            Archive(bw, dirstrs, filestrs);
+            bw.Close();
+        }
+
+        public void Archive(BinaryWriter bw, string[] dirstrs, string[] filestrs)
+        {
             Directory_Items = new List<DirectoryItemInfo>();
 
             long pos_File_Size = 0x4;
@@ -616,7 +622,7 @@ namespace ARCTool.FileSys
             CS.String_Writer_Int(bw, Sum_IDIC);
             CS.String_Writer_Int(bw, FileEntryOffset);
             //0x30
-            var pos_StringTable = fs.Position;
+            var pos_StringTable = bw.BaseStream.Position;
             CS.Null_Writer_Int32(bw, 2);
             CS.String_Writer_Int(bw, AllFileCount);
             CS.String_Writer_Int(bw, DirectoryDepth_LessThan2);//
@@ -645,26 +651,24 @@ namespace ARCTool.FileSys
                 bw = bw
             };
             var FileEntrySectionItemNum = RARCNS.Write();
-            PaddingWriter(fs, bw);
+            PaddingWriter(bw.BaseStream, bw);
 
-            var pos_nulldataold = fs.Position;
+            var pos_nulldataold = bw.BaseStream.Position;
             for (var i = 0; i < FileEntrySectionItemNum; i++)
                 NullDataWriter(bw);
-            PaddingWriter(fs, bw);
+            PaddingWriter(bw.BaseStream, bw);
 
-            var pos_StringDataTop = fs.Position;
+            var pos_StringDataTop = bw.BaseStream.Position;
             bw.Write(ms.ToArray());
-            PaddingWriter(fs, bw);
-            var pos_FileDataTop = fs.Position;
+            PaddingWriter(bw.BaseStream, bw);
+            var pos_FileDataTop = bw.BaseStream.Position;
 
 
 
-            fs.Seek(pos_nulldataold, SeekOrigin.Begin);
+            bw.BaseStream.Seek(pos_nulldataold, SeekOrigin.Begin);
 
 
             //FileEntrySection
-            var currentfolder = extractPath.Substring(0, extractPath.Count() - 4);
-            //Console.WriteLine(currentfolder);
             string[] dirnode;
             string[] filenode;
             var filesizetotal = 0;
@@ -723,10 +727,10 @@ namespace ARCTool.FileSys
                         CS.String_Writer_Int(bw, 0x00000000);
 
                         //fileWriter
-                        var pos_before_filedata_write = fs.Position;
-                        fs.Seek(pos_FileDataTop + filesizetotal, SeekOrigin.Begin);
+                        var pos_before_filedata_write = bw.BaseStream.Position;
+                        bw.BaseStream.Seek(pos_FileDataTop + filesizetotal, SeekOrigin.Begin);
                         bw.Write(File.ReadAllBytes(sorted_dirConcatfile[i]));
-                        fs.Seek(pos_before_filedata_write, SeekOrigin.Begin);
+                        bw.BaseStream.Seek(pos_before_filedata_write, SeekOrigin.Begin);
 
                         testfilenum++;
 
@@ -775,31 +779,27 @@ namespace ARCTool.FileSys
                 //}
             }
 
-            fs.Seek(fs.Length, SeekOrigin.Begin);
-            PaddingWriter(fs, bw);
+            bw.BaseStream.Seek(bw.BaseStream.Length, SeekOrigin.Begin);
+            PaddingWriter(bw.BaseStream, bw);
 
             //Console.WriteLine(CS.ARC_Hash(".."));
 
             //ファイルサイズを書き込む
-            fs.Seek(pos_File_Size, SeekOrigin.Begin);
-            CS.String_Writer_Int(bw, (int)fs.Length);
+            bw.BaseStream.Seek(pos_File_Size, SeekOrigin.Begin);
+            CS.String_Writer_Int(bw, (int)bw.BaseStream.Length);
 
             //ファイルデータセクションのオフセットとサイズを書き込む
-            fs.Seek(pos_FileDataSection, SeekOrigin.Begin);
+            bw.BaseStream.Seek(pos_FileDataSection, SeekOrigin.Begin);
             CS.String_Writer_Int(bw, (int)(pos_FileDataTop - 0x20));
-            CS.String_Writer_Int(bw, (int)(fs.Length - pos_FileDataTop));
-            CS.String_Writer_Int(bw, (int)(fs.Length - pos_FileDataTop));
+            CS.String_Writer_Int(bw, (int)(bw.BaseStream.Length - pos_FileDataTop));
+            CS.String_Writer_Int(bw, (int)(bw.BaseStream.Length - pos_FileDataTop));
 
             //文字列テーブルのセクションサイズとオフセット
-            fs.Seek(pos_StringTable, SeekOrigin.Begin);
+            bw.BaseStream.Seek(pos_StringTable, SeekOrigin.Begin);
             CS.String_Writer_Int(bw, (int)(pos_FileDataTop - pos_StringDataTop));
             CS.String_Writer_Int(bw, (int)(pos_StringDataTop - 0x20));
 
             //Console.WriteLine("RARC_End");
-
-            //fs,bw終了処理
-            fs.Close();
-            bw.Close();
         }
 
 
@@ -827,7 +827,7 @@ namespace ARCTool.FileSys
         /// <return>戻り値：なし</return>
         /// </summary>
         /// <remarks>圧縮専用</remarks>
-        public static void PaddingWriter(FileStream fs, BinaryWriter bw)
+        public static void PaddingWriter(Stream fs, BinaryWriter bw)
         {
             if (fs.Position % 32f != 0)
             {

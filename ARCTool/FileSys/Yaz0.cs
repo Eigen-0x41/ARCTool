@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using System.IO;
 using System.Collections;
 using CS = ARCTool.FileSys.Calculation_System;
+using System.Buffers.Binary;
 
 namespace ARCTool.FileSys
 {
@@ -20,18 +21,18 @@ namespace ARCTool.FileSys
         public string Magic
         {
             set => s_magic = value;
-            get 
+            get
             {
                 s_magic = "Yaz0";
-                return s_magic; 
+                return s_magic;
             }
         }
         public int OriginalDataSize { get; set; }
-        public int Unknown1 
+        public int Unknown1
         {
-            set 
+            set
             {
-                if (value != 0x00000000) 
+                if (value != 0x00000000)
                 {
                     Console.WriteLine("Yaz0のUnknown1プロパティで例外が発生しました");
                     Console.WriteLine("下記のエラー内容を最下段のURLに報告してください。");
@@ -40,16 +41,16 @@ namespace ARCTool.FileSys
                     Console.ReadKey();
                     Environment.Exit(0);
                 }
-                s_unknown1 = value; 
+                s_unknown1 = value;
             }
-            get 
+            get
             {
                 s_unknown1 = 0x00000000;
                 return s_unknown1;
             }
-            
+
         }
-        public int Unknown2 
+        public int Unknown2
         {
             set
             {
@@ -72,7 +73,7 @@ namespace ARCTool.FileSys
         }
 
         private readonly Byte[] IsNormalRead = {
-            0b_1000_0000 , 
+            0b_1000_0000 ,
             0b_0100_0000 ,
             0b_0010_0000 ,
             0b_0001_0000 ,
@@ -89,14 +90,14 @@ namespace ARCTool.FileSys
             public ChunkData(bool isRead , List<byte> byteList) {
                 IsNormalRead = isRead;
                 ByteList = new List<byte>(byteList);
-            
+
             }
         }
 
         private ChunkData[] ChunkDatas = new ChunkData[8];
 
         private static List<string> s_debug = new List<string>();
-        public void Decord(string filepath)
+        public void Decode(string filepath)
         {
 
             List<bool> bitlist = new();
@@ -198,7 +199,7 @@ namespace ARCTool.FileSys
             foreach (var str in s_debug)
             {
                 stringBuilder.Append(str);
-                
+
             }
             File.WriteAllText(path + "\\DebugByte.txt", stringBuilder.ToString());
 #endif
@@ -213,7 +214,7 @@ namespace ARCTool.FileSys
             bitlist.Reverse();
             return bitlist;
         }
-        
+
         public static byte[] ArrayReverse(byte[] array)
         {
             Array.Reverse(array);
@@ -229,123 +230,67 @@ namespace ARCTool.FileSys
             bw.Write(NewBytes, sindex, eindex);
         }
 
-        public void Encode2(string encodeFilePath) 
+        public void Encode2(string encodeFilePath, BinaryReader br)
         {
-            const byte OffByOne = 1;
+            FileStream fs = new(encodeFilePath, FileMode.Create);
+            Encode2(new BinaryWriter(fs), br);
+            fs.Close();
+        }
 
-            var Yaz0_FullPath            = Path.ChangeExtension(encodeFilePath, ".arc");
-            var Origin_File_ByteArray    = File.ReadAllBytes(encodeFilePath);
-            var Origin_File_Size         = Origin_File_ByteArray.Length;
-            var DictionaryList           = new List<byte>();
+        public void Encode2(BinaryWriter bw, BinaryReader br)
+        {
+            var DictionaryList = new List<byte>();
 
-            FileStream   fsRARC = new(encodeFilePath, FileMode.Open);
-            BinaryReader brRARC = new(fsRARC);
-            MemoryStream msYaz0 = new();
-            BinaryWriter bwYaz0 = new(msYaz0);
 
             //ヘッダー情報の書き込み
-            CS.String_Writer(bwYaz0, Magic);
-            CS.String_Writer_Int(bwYaz0, Origin_File_Size);
-            CS.Null_Writer_Int32(bwYaz0, 2);
+            CS.String_Writer(bw, Magic);
+            var buf = new byte[4];
+            BinaryPrimitives.WriteUInt32BigEndian(buf, (uint)br.BaseStream.Length);
+            bw.Write(buf);
+            CS.Null_Writer_Int32(bw, 2);
 
             Console.WriteLine("header end");
 
+            Console.WriteLine("write chunk");
+
+            Yaz0Chunk chunk = new Yaz0ChunkRawEncode(br);
+            bw.Write(chunk.GetValue());
+
+            ////チャンクデータの読み込み方法を設定
+            //while (br.BaseStream.Position < br.BaseStream.Length)
+            //{
+            //    chunk = new Yaz0ChunkEncode(br);
+            //    bw.Write(chunk.GetValue());
+            //}
+            ////チャンクデータの読み込み方法を設定_END
+
+            List<Yaz0Unit> buffer = new();
             //チャンクデータの読み込み方法を設定
-            while (fsRARC.Position < Origin_File_Size)
+            while (br.BaseStream.Position < br.BaseStream.Length)
             {
-                //読み込み方法デフォルト値
-                //注意：通常読み込みの場合のみ更新します。
-                byte NormalRead = 0b_0000_0000;
-
-                //読み込みフラグのダミーデータを入れる
-                var Pos_DummyData = msYaz0.Position;
-                bwYaz0.Write((byte)NormalRead);
-
-                Console.WriteLine("dummy end");
-
-                //チャンクデータを書き込む
-                for (var chunkIndex = 0; chunkIndex < 8; chunkIndex++)
-                {
-                    var Pos_SearchDataTop = fsRARC.Position;
-
-                    //ファイル末尾まで残り3バイト以下の処理
-                    if (Origin_File_Size < fsRARC.Position + Read_3Byte)
-                    {
-                        //符号反転して残りのビットフラグをすべて通常読み込みにする。
-                        byte ReversNormalRead = (byte)~NormalRead;
-                        NormalRead += ReversNormalRead;
-
-                        //ファイル末尾までデータをそのまま読み込む
-                        for (var t = fsRARC.Position; t < Origin_File_Size; t++)
-                        {
-                            bwYaz0.Write(brRARC.ReadByte());
-                        }
-                        Console.WriteLine("End");
-                        break;
-                    }
-
-                    //辞書データのサイズを設定する
-                    ushort Dictionary_DataSize;
-                    if ((fsRARC.Position >= 2) && (fsRARC.Position < 0x12))
-                    {
-                        Dictionary_DataSize = Read_3Byte;
-                    }
-                    else if (fsRARC.Position < Dictionary_MaxRange)
-                    {
-                        Dictionary_DataSize = (ushort)(fsRARC.Position + OffByOne);
-                    }
-                    else 
-                    {
-                        Dictionary_DataSize = Dictionary_MaxRange;
-                    }
-
-                    //検索データを抽出
-                    byte[] ByteArray3 = new byte[Dictionary_DataSize];
-                    for (long i = 0; i < Dictionary_DataSize; i++)
-                    {
-                        ByteArray3[i] = brRARC.ReadByte();
-                    }
-
-                    
-
-                    //初回の処理
-                    if (fsRARC.Position == 0)
-                    {
-                        for (long i = 0; i < 3; i++)
-                        {
-                            DictionaryList.Add(ByteArray3[i]);
-                            bwYaz0.Write(ByteArray3[i]);
-                            NormalRead += IsNormalRead[i];
-                        }
-                        chunkIndex = 2;
-                        continue;
-                    }
-
-                    File.WriteAllBytes(Yaz0_FullPath, msYaz0.ToArray());
-                    Console.WriteLine(fsRARC.Position);
-                    Console.ReadKey();
-                    brRARC.Close();
-                    fsRARC.Close();
-                    bwYaz0.Close();
-                    msYaz0.Close();
-                    return;
-
-                    //3Byteを辞書データの末尾から検索する
-                    for (long j = 0; j > -1; j--) { }
-
-                }
-                //チャンクデータを書き込む_END
-
+                buffer = Yaz0ChunkEncode.PreprocessUnit(br, buffer);
+                chunk = new Yaz0ChunkEncode(ref buffer);
+                bw.Write(chunk.GetValue());
+            }
+            if (buffer.Count() > 0)
+            {
+                chunk = new Yaz0ChunkEncode(ref buffer);
+                bw.Write(chunk.GetValue());
             }
             //チャンクデータの読み込み方法を設定_END
 
-            File.WriteAllBytes(Yaz0_FullPath, msYaz0.ToArray());
-            Console.WriteLine(fsRARC.Position);
+            const int Pack_Length = sizeof(Int32) * 4;
+            var mod = bw.BaseStream.Length % Pack_Length;
+            byte[] padding = new byte[Pack_Length - mod];
+
+            if (padding.Length != 0)
+            {
+                padding[0] = 0xFF;
+                bw.Write(padding);
+            }
+
+            Console.WriteLine(br.BaseStream.Position);
             Console.ReadKey();
-            brRARC.Close();
-            fsRARC.Close();
-            bwYaz0.Close();
-            msYaz0.Close();
         }
 
         public void Encode(string encodeFilePath)
@@ -379,14 +324,14 @@ namespace ARCTool.FileSys
                 if (fsRARC.Position >= OriginalFileLength) break ;
 
                 //チャンク先頭の読み込みフラグ
-                byte NormalRead = 0b_0000_0000;             
+                byte NormalRead = 0b_0000_0000;
 
                 //読み込みフラグのダミーデータを入れる
                 var Pos_DummyData = msYaz0.Position;
                 bwYaz0.Write((byte)NormalRead);
 
 
-                List <List<byte>> ChunkList = new();
+                List<List<byte>> ChunkList = new();
                 byte ReadingByte;
 
 
@@ -399,7 +344,7 @@ namespace ARCTool.FileSys
                     //3バイト目までは必ず書き込む
                     if (fsRARC.Position == 0)
                     {
-                        for (var FirstIndex = 0; FirstIndex < 3; FirstIndex++) 
+                        for (var FirstIndex = 0; FirstIndex < 3; FirstIndex++)
                         {
                             ChunkIndex = FirstIndex;
                             NormalRead += IsNormalRead[ChunkIndex];
@@ -413,14 +358,14 @@ namespace ARCTool.FileSys
                     }
 
                     //ファイル末尾まで残り3バイト以下の処理
-                    if (OriginalFileLength < fsRARC.Position + Read_3Byte) 
+                    if (OriginalFileLength < fsRARC.Position + Read_3Byte)
                     {
                         //符号反転して残りのビットフラグをすべて通常読み込みにする。
                         byte ReversNormalRead = (byte)~NormalRead;
                         NormalRead += ReversNormalRead;
-                        
+
                         //ファイル末尾までデータをそのまま読み込む
-                        for (var t = fsRARC.Position; t < OriginalFileLength; t++) 
+                        for (var t = fsRARC.Position; t < OriginalFileLength; t++)
                         {
                             bwYaz0.Write(brRARC.ReadByte());
                         }
@@ -463,10 +408,10 @@ namespace ARCTool.FileSys
 
 
                     bool OldFound = DictionaryFinder_3Byte(ChunkInsideBytes,ResizedDictionaryData,out MatchByteCount);
-                    
+
 
                     //3バイトが見つからなかった場合(通常の処理フラグは1)
-                    if (OldFound == false) 
+                    if (OldFound == false)
                     {
                         //Console.WriteLine("NormalReading");
                         fsRARC.Seek(pos_Byte2nd, SeekOrigin.Begin);
@@ -476,14 +421,14 @@ namespace ARCTool.FileSys
                         DictionaryList.RemoveAt(DictionaryList.Count - 1);
                         NormalRead += IsNormalRead[ChunkIndex];
                         bwYaz0.Write(Byte1st);
-                        
+
                         continue;
                     }
 
                     //ここまでチェック済み
                     if (fsRARC.Position + Dictionary_ReadLength >= OriginalFileLength) break;
 
-                    for (var tmp = 0; tmp < (Dictionary_ReadLength + 1); tmp++) 
+                    for (var tmp = 0; tmp < (Dictionary_ReadLength + 1); tmp++)
                     {
                         byte byteTmp = brRARC.ReadByte();
                         ChunkInsideBytes.Add(byteTmp);
@@ -496,7 +441,7 @@ namespace ARCTool.FileSys
 
 
                     OldFound = DictionaryFinder_FByte(ChunkInsideBytes, ResizedDictionaryData, out MatchByteCount,out MatchByteIndex,fsRARC.Position);
-                    
+
 
 
                     //Fバイトが見つからなかった場合(処理フラグは0)
@@ -515,7 +460,7 @@ namespace ARCTool.FileSys
                     }
                     Console.WriteLine("おーばー");
                     Console.ReadKey();
-                    
+
                     File.WriteAllBytes(Yaz0_FullPath, msYaz0.ToArray());
                     Console.WriteLine(fsRARC.Position);
                     Console.ReadKey();
@@ -530,7 +475,7 @@ namespace ARCTool.FileSys
                 bwYaz0.Write(NormalRead);
                 msYaz0.Seek(msYaz0.Length, SeekOrigin.Begin);
                 continue;
-                
+
                 //ファイル末尾のための処理
                 long SearchDataSize = 0x0F;
                 long DistanceFromEnd = OriginalFileLength - fsRARC.Position;
@@ -538,12 +483,12 @@ namespace ARCTool.FileSys
                 {
                     SearchDataSize = DistanceFromEnd;
                 }
-                
+
 
                 var DictionaryData = new List<byte>();
                 int FindDistance;
                 int MatchCount;
-                for (var j = 0; j < SearchDataSize; j++) 
+                for (var j = 0; j < SearchDataSize; j++)
                 {
                     //3バイト目以降
                     var ByteX = brRARC.ReadByte();
@@ -551,7 +496,7 @@ namespace ARCTool.FileSys
                     long Pos_Now = fsRARC.Position;
 
                     var Find = Array.LastIndexOf(Original_File,ChunkList,(int)ReadingPosition,j+ (int)Read_3Byte);
-                    if (Find == -1) 
+                    if (Find == -1)
                     {
                         ChunkList.RemoveAt((int)Pos_Now - 1);
                         fsRARC.Seek(fsRARC.Position - 1, SeekOrigin.Begin);
@@ -559,9 +504,9 @@ namespace ARCTool.FileSys
                     }
                     FindDistance = Find;
                     MatchCount = ChunkList.Count();
-                    if (FindDistance > 0xF) 
+                    if (FindDistance > 0xF)
                     {
-                        FindDistance = 0; 
+                        FindDistance = 0;
                     }
                 }
 
@@ -571,7 +516,7 @@ namespace ARCTool.FileSys
 
 
                 ////検索したいデータを作成
-                
+
                 if (fsRARC.Position >= OriginalFileLength) break;
 
 
@@ -590,7 +535,7 @@ namespace ARCTool.FileSys
         public static bool DictionaryFinder_3Byte(List<byte> ChunkInsideBytes,byte[] ResizedDictionaryData,out UInt16 findLastIndex) 
         {
             //int tes = 0;
-            
+
             const byte OffByOne = 1;
             bool OldFound = false;
             findLastIndex = 0xFFFF;
@@ -622,15 +567,15 @@ namespace ARCTool.FileSys
                 var isFind2 = ResizedDictionaryData[Index + 1] == ChunkInsideBytes[1];
                 var isFind3 = ResizedDictionaryData[Index + 2] == ChunkInsideBytes[2];
                 bool IsFound = (IsFind1 && isFind2 && isFind3);
-                if (IsFound) 
-                { 
-                    OldFound = true; 
-                    findLastIndex = (UInt16)Index; 
-                    break; 
-                } 
+                if (IsFound)
+                {
+                    OldFound = true;
+                    findLastIndex = (UInt16)Index;
+                    break;
+                }
 
             }
-            
+
 
             return OldFound;
         }
@@ -642,7 +587,7 @@ namespace ARCTool.FileSys
             bool OldFound = false;
             matchByteCount = (UInt16)0x000F;
             matchBtyeIndex = (UInt16)0x0FFF;
-            
+
             for (int Index0 = 0; Index0 < DictionaryMaxLength + OffByOne; Index0++)
             {
                 //DictionaryMaxLengthの数分配列を作成
@@ -657,7 +602,7 @@ namespace ARCTool.FileSys
                         Founds[0] = ResizedDictionaryData[0] == ChunkInsideBytes[0];
                         //Console.WriteLine("Case 0 end");
                     }
-                    else 
+                    else
                     {
                         for (int Index2 = 0; Index2 < Index0; Index2++)
                         {
@@ -672,7 +617,7 @@ namespace ARCTool.FileSys
                     //falseが含まれる場合
                     var FoundsLength = Founds.Length;
                     var IsFound = Founds.Where(value => value == false).ToArray();
-                    
+
                     //Console.WriteLine(IsFound.Length == 0);
                     //if (IsFound.Length != 0) continue;
                     if (IsFound.Length == FoundsLength) continue;
