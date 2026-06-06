@@ -95,6 +95,7 @@ namespace ARCTool.FileSys
                 {
                     skipCount++;
                     st.BaseStream.Seek(basePos, SeekOrigin.Begin);
+                    // [Count()-1] = [^1]
                     retValue[^1] = new Yaz0UnitEncode(st.ReadByte());
                     continue;
                 }

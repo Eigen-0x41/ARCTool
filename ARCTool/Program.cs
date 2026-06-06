@@ -19,7 +19,8 @@ namespace ARCTool
         private static string[] all_path_strings;
         private static string[] arc_path_strings;
         private static string[] dir_path_strings;
-        private static char yesno = 'n';
+        private static Yaz0.UseStatus yaz0EncodeStatus = Yaz0.UseStatus.UnUse;
+        private static bool isOptimize = false;
 
         public static void Main(string[] args)
         {
@@ -78,7 +79,11 @@ namespace ARCTool
                 {
                     if (isFirstTime)
                     {
-                        yesno = Yaz0.Use_Yaz0_Encode();
+                        yaz0EncodeStatus = Yaz0.Use_Yaz0_Encode();
+                        if (yaz0EncodeStatus is Yaz0.UseStatus.UseNew)
+                        {
+                            isOptimize = Yaz0.Use_Yaz0_Encode_Optimize();
+                        }
                         isFirstTime = false;
                     }
 
@@ -97,36 +102,37 @@ namespace ARCTool
                     RARC rarc = new();
 
                     var ArcExtractPath = arcfolder + @"\" + arcfile;
-                    if (yesno == 'y' || yesno == 'Y' || yesno == 'ｙ' || yesno == 'Ｙ')
+                    if (yaz0EncodeStatus is Yaz0.UseStatus.UseNew)
                     {
-                        if (isUseOtherExefile)
+                        MemoryStream memst = new();
+
+                        memst.Seek(0, SeekOrigin.Begin);
+                        rarc.Archive(new BinaryWriter(memst), DirStrs, FileStrs);
+                        Console.WriteLine("yaz0処理に入りました");
+                        Console.WriteLine("圧縮中・・・");
+
+                        memst.Seek(0, SeekOrigin.Begin);
+                        if (isOptimize)
                         {
-                            rarc.Archive(ArcExtractPath + ".rarc", DirStrs, FileStrs);
-                            Console.WriteLine("yaz0処理に入りました");
-                            Console.WriteLine("圧縮中・・・");
-                            AppExecuter.Start(arcfolder + @"\" + arcfile + ".rarc");
-                            //Yaz0 yaz0 = new();
-                            //yaz0.Encode2(arcfolder + @"\" + arcfile + ".rarc");
+                            yaz0.EncodeOptimize(Path.ChangeExtension(ArcExtractPath, "arc"), new BinaryReader(memst));
                         }
                         else
                         {
-                            MemoryStream memst = new();
-
-                            memst.Seek(0, SeekOrigin.Begin);
-                            rarc.Archive(new BinaryWriter(memst), DirStrs, FileStrs);
-                            Console.WriteLine("yaz0処理に入りました");
-                            Console.WriteLine("圧縮中・・・");
-
-                            memst.Seek(0, SeekOrigin.Begin);
-                            yaz0.Encode2(ArcExtractPath + "arc", new BinaryReader(memst));
-
-                            memst.Close();
+                            yaz0.Encode(Path.ChangeExtension(ArcExtractPath, "arc"), new BinaryReader(memst));
                         }
 
-
+                        memst.Close();
 
                         Console.WriteLine("Yaz0圧縮できました");
-                        //Console.ReadKey();
+                        continue;
+                    }
+                    else if (yaz0EncodeStatus is Yaz0.UseStatus.Use)
+                    {
+                        rarc.Archive(ArcExtractPath + ".rarc", DirStrs, FileStrs);
+                        Console.WriteLine("yaz0処理に入りました");
+                        Console.WriteLine("圧縮中・・・");
+                        AppExecuter.Start(arcfolder + @"\" + arcfile + ".rarc");
+                        Console.WriteLine("Yaz0圧縮できました");
                         continue;
                     }
 

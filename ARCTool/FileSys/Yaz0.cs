@@ -230,26 +230,33 @@ namespace ARCTool.FileSys
             bw.Write(NewBytes, sindex, eindex);
         }
 
-        public void Encode2(string encodeFilePath, BinaryReader br)
+        private void HeaderWriter(BinaryWriter bw, long RawSize)
         {
-            FileStream fs = new(encodeFilePath, FileMode.Create);
-            Encode2(new BinaryWriter(fs), br);
-            fs.Close();
-        }
-
-        public void Encode2(BinaryWriter bw, BinaryReader br)
-        {
-            var DictionaryList = new List<byte>();
-
-
-            //ヘッダー情報の書き込み
             CS.String_Writer(bw, Magic);
             var buf = new byte[4];
-            BinaryPrimitives.WriteUInt32BigEndian(buf, (uint)br.BaseStream.Length);
+            BinaryPrimitives.WriteUInt32BigEndian(buf, (uint)RawSize);
             bw.Write(buf);
             CS.Null_Writer_Int32(bw, 2);
+        }
 
-            Console.WriteLine("header end");
+        private static void PaddingWriter(BinaryWriter bw)
+        {
+            const int Pack_Length = sizeof(Int32) * 4;
+            var mod = bw.BaseStream.Length % Pack_Length;
+            byte[] padding = new byte[Pack_Length - mod];
+
+            if (padding.Length != 0)
+            {
+                padding[0] = 0xFF;
+                bw.Write(padding);
+            }
+        }
+
+        public void EncodeOptimize(BinaryWriter bw, BinaryReader br)
+        {
+            //ヘッダー情報の書き込み
+            Console.WriteLine("write header");
+            HeaderWriter(bw, br.BaseStream.Length);
 
             Console.WriteLine("write chunk");
 
@@ -272,28 +279,57 @@ namespace ARCTool.FileSys
                 chunk = new Yaz0ChunkEncode(ref buffer);
                 bw.Write(chunk.GetValue());
             }
-            if (buffer.Count() > 0)
+            if (buffer.Count > 0)
             {
                 chunk = new Yaz0ChunkEncode(ref buffer);
                 bw.Write(chunk.GetValue());
             }
             //チャンクデータの読み込み方法を設定_END
 
-            const int Pack_Length = sizeof(Int32) * 4;
-            var mod = bw.BaseStream.Length % Pack_Length;
-            byte[] padding = new byte[Pack_Length - mod];
+            Console.WriteLine("write padding");
+            PaddingWriter(bw);
 
-            if (padding.Length != 0)
+            Console.WriteLine($"Stream End Pos: {br.BaseStream.Position}");
+        }
+        public void EncodeOptimize(string encodeFilePath, BinaryReader br)
             {
-                padding[0] = 0xFF;
-                bw.Write(padding);
-            }
-
-            Console.WriteLine(br.BaseStream.Position);
-            Console.ReadKey();
+            FileStream fs = new(encodeFilePath, FileMode.Create);
+            EncodeOptimize(new BinaryWriter(fs), br);
+            fs.Close();
         }
 
-        public void Encode(string encodeFilePath)
+        public void Encode(BinaryWriter bw, BinaryReader br)
+        {
+            Console.WriteLine("write header");
+            HeaderWriter(bw, br.BaseStream.Length);
+
+            Console.WriteLine("write chunk");
+            Yaz0Chunk chunk = new Yaz0ChunkRawEncode(br);
+            bw.Write(chunk.GetValue());
+
+            while (br.BaseStream.Position < br.BaseStream.Length)
+            {
+                chunk = new Yaz0ChunkEncode(br);
+                bw.Write(chunk.GetValue());
+            }
+
+            Console.WriteLine("write padding");
+            PaddingWriter(bw);
+
+            Console.WriteLine($"Stream End Pos: {br.BaseStream.Position}");
+            }
+
+        public void Encode(string encodeFilePath, BinaryReader br)
+        {
+            FileStream fs = new(encodeFilePath, FileMode.Create);
+            Encode(new BinaryWriter(fs), br);
+            fs.Close();
+        }
+
+
+
+        // TODO: 必要か？
+        public void EncodeOld(string encodeFilePath)
         {
             var Yaz0_FullPath = Path.ChangeExtension(encodeFilePath, ".arc");
 
@@ -778,14 +814,40 @@ namespace ARCTool.FileSys
         //    Console.ReadKey();
         //}
 
-        public static char Use_Yaz0_Encode()
+        public enum UseStatus
+        {
+            UnUse,
+            Use,
+            UseNew,
+        }
+
+        public static UseStatus Use_Yaz0_Encode()
         {
             Console.WriteLine("全ての項目にYaz0圧縮をしますか？");
             Console.WriteLine("※解凍時は自動でYaz0の処理を実行します。");
-            Console.WriteLine("y Yaz0圧縮を使用　n Yaz0圧縮を使用しない");
+            Console.WriteLine("y Yaz0圧縮を使用　Y Yaz0圧縮(新)を使用 n Yaz0圧縮を使用しない");
 
-            var yesnoChars = Console.ReadLine().ToCharArray();
-            return yesnoChars[0];
+            switch (Console.ReadLine().ToCharArray()[0])
+            {
+                case 'y':
+                case 'ｙ':
+                    return UseStatus.Use;
+                case 'Y':
+                case 'Ｙ':
+                    return UseStatus.UseNew;
+            }
+
+            return UseStatus.UnUse;
+        }
+
+        public static bool Use_Yaz0_Encode_Optimize()
+        {
+            Console.WriteLine("圧縮の最適化を使用しますか？");
+            Console.WriteLine("y 最適化する　n 最適化しない");
+
+            var yesno = Console.ReadLine().ToCharArray()[0];
+
+            return (yesno == 'y') || (yesno == 'ｙ') || (yesno == 'Y') || (yesno == 'Ｙ');
         }
     }
 }
