@@ -30,7 +30,7 @@ namespace ARCTool.FileSys
             else if (Magic == "Yaz0")
             {
                 //Console.WriteLine("Yaz0が含まれたRARCはまだ未対応です");
-                Yaz0.Decord(rarc_path);
+                Yaz0.Decode(rarc_path);
                 Console.WriteLine("Yaz0End");
                 var savedirectory = rarc_path.Substring(0, rarc_path.LastIndexOf(@"\"));
                 var savefilename = Path.GetFileNameWithoutExtension(rarc_path) + ".rarc";
