@@ -13,7 +13,7 @@ namespace ARCTool.FileSys
     public class AppExecuter
     {
 
-        public static void Start(string filePath) 
+        public static void Start(string filePath)
         {
             var newYaz0Path = Path.ChangeExtension(filePath,".arc");
 
@@ -33,7 +33,7 @@ namespace ARCTool.FileSys
             {
                 FileName = appDirPath+@"\yaz0enc.exe",
                 WorkingDirectory = appDirPath,
-                Arguments = filePath,
+                Arguments = $"\"{filePath}\"",
                 UseShellExecute = false,
                 RedirectStandardError = true,
                 RedirectStandardInput = true,
@@ -52,12 +52,12 @@ namespace ARCTool.FileSys
                 throw new Exception("Yaz0のエンコードで問題が発生しました。");
             }
 
-            if (File.Exists(filePath + ".yaz0")) 
+            if (File.Exists(filePath + ".yaz0"))
             {
                 File.Copy(filePath + ".yaz0", newYaz0Path, true);
                 File.Delete(filePath);
                 File.Delete(filePath + ".yaz0");
-            }    
+            }
             else
                 throw new Exception("rarcファイルがありません");
         }
@@ -70,12 +70,12 @@ namespace ARCTool.FileSys
         private byte[] _originData;
         private int _originDataSize;
 
-        public Yaz0Test() 
+        public Yaz0Test()
         {
-        
+
         }
 
-        public void Encode(string rarcFullPath) 
+        public void Encode(string rarcFullPath)
         {
             _yaz0FullPath = Path.ChangeExtension (rarcFullPath,".arc");
             _originData   = File.ReadAllBytes    (rarcFullPath);
@@ -83,7 +83,7 @@ namespace ARCTool.FileSys
 
             using (MemoryStream ms = new MemoryStream()) 
             {
-                using (BinaryWriter bw = new BinaryWriter(ms)) 
+                using (BinaryWriter bw = new BinaryWriter(ms))
                 {
                     HeaderWrite(bw,_originDataSize);
 
@@ -92,7 +92,7 @@ namespace ARCTool.FileSys
 
                 }
             }
-            
+
         }
 
         private void HeaderWrite(BinaryWriter bw,int rarcSize) 
@@ -103,20 +103,20 @@ namespace ARCTool.FileSys
             bw.Write(0x00000000);
         }
 
-        private void EncodeStart(BinaryWriter bw) 
+        private void EncodeStart(BinaryWriter bw)
         {
-            
 
-            using (MemoryStream ms = new MemoryStream(_originData)) 
+
+            using (MemoryStream ms = new MemoryStream(_originData))
             {
-                using (BinaryReader br = new BinaryReader(ms)) 
+                using (BinaryReader br = new BinaryReader(ms))
                 {
-                
+
                 }
             }
         }
 
-        private void EncodeMain(BinaryWriter bw, BinaryReader br) 
+        private void EncodeMain(BinaryWriter bw, BinaryReader br)
         {
             var pos_StartYaz0Data = bw.BaseStream.Position;
 
