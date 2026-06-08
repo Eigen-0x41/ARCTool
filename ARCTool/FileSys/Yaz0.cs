@@ -263,14 +263,6 @@ namespace ARCTool.FileSys
             Yaz0Chunk chunk = new Yaz0ChunkRawEncode(br);
             bw.Write(chunk.GetValue());
 
-            ////チャンクデータの読み込み方法を設定
-            //while (br.BaseStream.Position < br.BaseStream.Length)
-            //{
-            //    chunk = new Yaz0ChunkEncode(br);
-            //    bw.Write(chunk.GetValue());
-            //}
-            ////チャンクデータの読み込み方法を設定_END
-
             List<Yaz0Unit> buffer = new();
             //チャンクデータの読み込み方法を設定
             while (br.BaseStream.Position < br.BaseStream.Length)
