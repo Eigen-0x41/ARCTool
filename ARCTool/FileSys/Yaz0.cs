@@ -251,6 +251,28 @@ namespace ARCTool.FileSys
                 bw.Write(padding);
             }
         }
+        public void EncodeOptimizeV2(BinaryWriter bw, BinaryReader br)
+        {
+            //ヘッダー情報の書き込み
+            Console.WriteLine("write header");
+            HeaderWriter(bw, br.BaseStream.Length);
+
+            Console.WriteLine("write chunk");
+
+            Yaz0Encode encoder = new();
+            encoder.Encode(bw, br);
+
+            Console.WriteLine("write padding");
+            PaddingWriter(bw);
+
+            Console.WriteLine($"Stream End Pos: {br.BaseStream.Position}");
+        }
+        public void EncodeOptimizeV2(string encodeFilePath, BinaryReader br)
+        {
+            FileStream fs = new(encodeFilePath, FileMode.Create);
+            EncodeOptimizeV2(new BinaryWriter(fs), br);
+            fs.Close();
+        }
 
         public void EncodeOptimize(BinaryWriter bw, BinaryReader br)
         {
