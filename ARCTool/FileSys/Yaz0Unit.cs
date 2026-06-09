@@ -131,23 +131,24 @@ namespace ARCTool.FileSys
 
         public Yaz0UnitEncode(BinaryReader br)
         {
-            var dictionary = new byte[Dictionary_Buffer_Size];
+            // 辞書と圧縮されるデータをここに格納します。
+            var buffer = new byte[Dictionary_Buffer_Size];
             List<long> matchOffsetBuffer = new();
 
             var basePosition = br.BaseStream.Position;
 
-            long dictionaryBaseSize = Math.Min(basePosition, Max_Dictionary_Offset);
+            long targetPosInBuf = Math.Min(basePosition, Max_Dictionary_Offset);
 
-            br.BaseStream.Seek(basePosition - dictionaryBaseSize, SeekOrigin.Begin);
+            br.BaseStream.Seek(basePosition - targetPosInBuf, SeekOrigin.Begin);
 
-            var compressSize = br.BaseStream.Read(dictionary) - dictionaryBaseSize;
+            var compressSize = br.BaseStream.Read(buffer) - targetPosInBuf;
             compressSize = Math.Min(compressSize, Byte3_Max_Dictionary_Length);
 
             br.BaseStream.Seek(basePosition, SeekOrigin.Begin);
 
-            foreach (var i in Enumerable.Range(0, (int)dictionaryBaseSize))
+            foreach (var i in Enumerable.Range(0, (int)targetPosInBuf))
             {
-                if (dictionary[i] != dictionary[dictionaryBaseSize])
+                if (buffer[i] != buffer[targetPosInBuf])
                     continue;
 
                 matchOffsetBuffer.Add(i);
@@ -170,7 +171,7 @@ namespace ARCTool.FileSys
                 int length = 1;
                 while (length < compressSize)
                 {
-                    if (dictionary[targetDictOffset + length] != dictionary[dictionaryBaseSize + length])
+                    if (buffer[targetDictOffset + length] != buffer[targetPosInBuf + length])
                         break;
                     length++;
                 }
@@ -185,7 +186,7 @@ namespace ARCTool.FileSys
             if (currentLength > Byte2_Additional_Length)
             {
                 br.BaseStream.Seek(basePosition + currentLength, SeekOrigin.Begin);
-                Initializer((dictionaryBaseSize - 1) - currentPos, currentLength);
+                Initializer((targetPosInBuf - 1) - currentPos, currentLength);
                 return;
             }
 

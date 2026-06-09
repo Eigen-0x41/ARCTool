@@ -114,7 +114,7 @@ namespace ARCTool
                         memst.Seek(0, SeekOrigin.Begin);
                         if (isOptimize)
                         {
-                            yaz0.EncodeOptimize(Path.ChangeExtension(ArcExtractPath, "arc"), new BinaryReader(memst));
+                            yaz0.EncodeOptimizeV2(Path.ChangeExtension(ArcExtractPath, "arc"), new BinaryReader(memst));
                         }
                         else
                         {
