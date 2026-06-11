@@ -438,7 +438,7 @@ namespace ARCTool.FileSys
             short DSL = (short)DirectoryStrings.Length;
             short AllFileCount = FSL;
             var HasTwoDepth = true;
-            Console.WriteLine($"FSL{FSL}");
+            //Console.WriteLine($"FSL{FSL}");
             //var TmpDir = Directory.GetDirectories(DirectoryStrings[0], "*", SearchOption.TopDirectoryOnly);
             //foreach (var TmpTmpDir in TmpDir) {
             //    var Tmp3Dir = Directory.GetDirectories(TmpTmpDir, "*", SearchOption.TopDirectoryOnly).Length;
@@ -451,7 +451,7 @@ namespace ARCTool.FileSys
             foreach (var dirName in DirectoryStrings) {
                 var dir = Directory.GetDirectories(dirName, "*", SearchOption.TopDirectoryOnly).Length;
                 var file = Directory.GetFiles(dirName, "*", SearchOption.TopDirectoryOnly).Length;
-                Console.WriteLine($"dir{dir}:file{file}");
+                //Console.WriteLine($"dir{dir}:file{file}");
                 if ((dir + file) < 3) {
 
                     HasTwoDepth = false;
@@ -469,7 +469,7 @@ namespace ARCTool.FileSys
                 return AllFileCount;
             }
 
-            Console.WriteLine($"Has not TwoDepth{AllFileCount}");
+            //Console.WriteLine($"Has not TwoDepth{AllFileCount}");
             Console.ReadKey();
             return AllFileCount;
         }
@@ -511,10 +511,10 @@ namespace ARCTool.FileSys
                 }
 
 
-                Console.WriteLine(DirectoryPath.Value);
-                Console.WriteLine("↓↓↓↓↓↓↓↓↓");
-                Console.WriteLine(ParentDirectory1Upper.FullName);
-                Console.WriteLine(ParentDirectory2Upper);
+                //Console.WriteLine(DirectoryPath.Value);
+                //Console.WriteLine("↓↓↓↓↓↓↓↓↓");
+                //Console.WriteLine(ParentDirectory1Upper.FullName);
+                //Console.WriteLine(ParentDirectory2Upper);
             }
             Console.ReadKey();
             //ディレクトリの深さが3以上の場合の処理
