@@ -37,10 +37,10 @@ namespace ARCTool.FileSys
                 return 0x01;
             }
 
-            public int Score(long skipCount)
+            public long Score(long diffPos)
             {
                 Debug.Assert(Length > 0);
-                return (int)Length - (int)(CompressSize() + skipCount);
+                return Length - CompressSize() - diffPos;
             }
 
             public void Init()
@@ -52,29 +52,32 @@ namespace ARCTool.FileSys
                 Offset = 0;
             }
 
-            public long Write(byte* flag, int writeFlagCount, byte* dst, in long pos, byte* src, in long srcPos)
+            public long Write(int* flag, int writeFlagCount, byte* dst, long* pos, byte* src, in long srcPos)
             {
                 if (Length > Byte2_Additional_Length)
                 {   // 2byte or 3byte
-                    dst[pos] = (byte)((0x0F00 & Offset) >> 0x08);
-                    dst[pos + 1] = (byte)(0x00FF & Offset);
+                    dst[*pos + 0x01] = (byte)(0xFF & Offset);
 
                     long length = 0;
                     if (Length >= Byte3_Additional_Length)
                     {   // 3byte
+                        dst[*pos] = (byte)(0x0F & (Offset >> 0x08));
                         length = Length - Byte3_Additional_Length;
-                        dst[pos + 2] = (byte)length;
-                        return 0x03;
+                        dst[*pos + 0x02] = (byte)length;
+                        *pos += 0x03;
+                        return Length;
                     }
 
                     length = Length - Byte2_Additional_Length;
-                    dst[pos] |= (byte)(0xF0 & (length << 0x04));
-                    return 0x02;
+                    dst[*pos] = (byte)((0xF0 & (length << 0x04)) |
+                                      (0x0F & (Offset >> 0x08)));
+                    *pos += 0x02;
+                    return Length;
                 }
 
-                Length = 1;
-                *flag |= (byte)(0b1000_0000 >> writeFlagCount);
-                dst[pos] = src[srcPos];
+                *flag |= 0b1000_0000 >> writeFlagCount;
+                dst[*pos] = src[srcPos];
+                *pos += 1;
                 return 0x01;
             }
         }
@@ -82,10 +85,15 @@ namespace ARCTool.FileSys
         private unsafe void GenUnit(Unit dst, in byte* data, in long size, in long pos)
         {
             dst.Init();
-            long dictBeginOffset = Math.Min(pos, Max_Dictionary_Offset + 1);
-            long maxCompSize = Math.Min(Byte3_Max_Dictionary_Length, size - pos);
+            long maxCompSize = (size - pos < Byte3_Max_Dictionary_Length)
+                                   ? size - pos
+                                   : Byte3_Max_Dictionary_Length;
 
-            for (long dictPos = pos - dictBeginOffset; dictPos < pos; dictPos++)
+            for (long dictPos = (pos > Max_Dictionary_Offset)
+                                    ? pos - Max_Dictionary_Offset + 1
+                                    : 0;
+                dictPos < pos;
+                dictPos++)
             {
                 long length = 0;
                 while (length < maxCompSize)
@@ -107,39 +115,43 @@ namespace ARCTool.FileSys
             dst.Offset = (pos - 1) - dst.Offset;
         }
 
+        // varを使用するとその際にコストがかかるかもしれないので
+        // この時点で宣言しておく。
+        private Unit bufferForSwap = null;
+
         private unsafe long Encode(byte* dst, in byte* src, in long size)
         {
             long dstPos = 0;
             long srcPos = 0;
             // 先頭の値は8バイト圧縮され"ます"(yaz0enc.exeより)。
 
-            byte flag = 0x00;
+            int flag = 0x00;
             long flagPos = dstPos;
-            int writeFlagCount = 8;
+            int writeFlagCount = 7;
 
             Unit currentUnit = new();
             Unit nextUnit = new();
             bool isNextUnitValid = false;
-            long skipCount = 0;
 
             while (srcPos < size)
             {
+                writeFlagCount++;
                 if (writeFlagCount == 8)
                 {
-                    dst[flagPos] = flag;
+                    dst[flagPos] = (byte)flag;
                     flag = 0x00;
                     flagPos = dstPos;
-                    writeFlagCount = 0x00;
                     dstPos++;
+                    writeFlagCount = 0;
                 }
 
                 if (isNextUnitValid)
                 {
                     // 参照先の交換
                     // やっていることはポインタの交換と同じ。
-                    var buffer = currentUnit;
+                    bufferForSwap = currentUnit;
                     currentUnit = nextUnit;
-                    nextUnit = buffer;
+                    nextUnit = bufferForSwap;
                 }
                 else
                 {
@@ -148,28 +160,20 @@ namespace ARCTool.FileSys
 
                 GenUnit(nextUnit, src, size, srcPos + 1);
 
-                if (currentUnit.Score(skipCount) < nextUnit.Score(skipCount + 1))
+                isNextUnitValid = nextUnit.Score(1) > currentUnit.Score(0);
+                if (isNextUnitValid)
                 {
-                    flag |= (byte)(0b1000_0000 >> writeFlagCount);
+                    flag |= 0b1000_0000 >> writeFlagCount;
                     dst[dstPos] = src[srcPos];
                     dstPos++;
                     srcPos++;
-                    skipCount++;
-                    isNextUnitValid = true;
-                }
-                else
-                {
-                    var dstSize = currentUnit.Write(&flag, writeFlagCount, dst, dstPos, src, srcPos);
-                    dstPos += dstSize;
-                    srcPos += currentUnit.Length;
-                    skipCount = 0;
-                    isNextUnitValid = false;
+                    continue;
                 }
 
-                writeFlagCount++;
+                srcPos += currentUnit.Write(&flag, writeFlagCount, dst, &dstPos, src, srcPos);
             }
 
-            dst[flagPos] = flag;
+            dst[flagPos] = (byte)flag;
 
             return dstPos;
         }
