@@ -254,18 +254,18 @@ namespace ARCTool.FileSys
         public void EncodeOptimizeV2(BinaryWriter bw, BinaryReader br)
         {
             //ヘッダー情報の書き込み
-            Console.WriteLine("write header");
+            //Console.WriteLine("write header");
             HeaderWriter(bw, br.BaseStream.Length);
 
-            Console.WriteLine("write chunk");
+            //Console.WriteLine("write chunk");
 
             Yaz0Encode encoder = new();
             encoder.Encode(bw, br);
 
-            Console.WriteLine("write padding");
+            //Console.WriteLine("write padding");
             PaddingWriter(bw);
 
-            Console.WriteLine($"Stream End Pos: {br.BaseStream.Position}");
+            //Console.WriteLine($"Stream End Pos: {br.BaseStream.Position}");
         }
         public void EncodeOptimizeV2(string encodeFilePath, BinaryReader br)
         {
@@ -277,10 +277,10 @@ namespace ARCTool.FileSys
         public void EncodeOptimize(BinaryWriter bw, BinaryReader br)
         {
             //ヘッダー情報の書き込み
-            Console.WriteLine("write header");
+            //Console.WriteLine("write header");
             HeaderWriter(bw, br.BaseStream.Length);
 
-            Console.WriteLine("write chunk");
+            //Console.WriteLine("write chunk");
 
             Yaz0Chunk chunk = new Yaz0ChunkRawEncode(br);
             bw.Write(chunk.GetValue());
@@ -300,10 +300,10 @@ namespace ARCTool.FileSys
             }
             //チャンクデータの読み込み方法を設定_END
 
-            Console.WriteLine("write padding");
+            //Console.WriteLine("write padding");
             PaddingWriter(bw);
 
-            Console.WriteLine($"Stream End Pos: {br.BaseStream.Position}");
+            //Console.WriteLine($"Stream End Pos: {br.BaseStream.Position}");
         }
         public void EncodeOptimize(string encodeFilePath, BinaryReader br)
             {
@@ -314,10 +314,10 @@ namespace ARCTool.FileSys
 
         public void Encode(BinaryWriter bw, BinaryReader br)
         {
-            Console.WriteLine("write header");
+            //Console.WriteLine("write header");
             HeaderWriter(bw, br.BaseStream.Length);
 
-            Console.WriteLine("write chunk");
+            //Console.WriteLine("write chunk");
             Yaz0Chunk chunk = new Yaz0ChunkRawEncode(br);
             bw.Write(chunk.GetValue());
 
@@ -327,10 +327,10 @@ namespace ARCTool.FileSys
                 bw.Write(chunk.GetValue());
             }
 
-            Console.WriteLine("write padding");
+            //Console.WriteLine("write padding");
             PaddingWriter(bw);
 
-            Console.WriteLine($"Stream End Pos: {br.BaseStream.Position}");
+            //Console.WriteLine($"Stream End Pos: {br.BaseStream.Position}");
             }
 
         public void Encode(string encodeFilePath, BinaryReader br)
