@@ -102,31 +102,31 @@ internal unsafe class Yaz0Encode
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public int Write(int* flag, int writeFlagCount, byte* dst, int* pos, byte* src, in int srcPos)
+        public int Write(int* flag, int writeFlagCount, byte* dst, int* dstPos, byte* src, in int srcPos)
         {
             if (Length > Byte2_Additional_Length)
             {
-                dst[*pos + 0x01] = (byte)(0xFF & Offset);
+                dst[*dstPos + 0x01] = (byte)(0xFF & Offset);
 
                 int length = 0;
                 if (Length >= Byte3_Additional_Length)
                 {
-                    dst[*pos] = (byte)(0x0F & (Offset >> 0x08));
+                    dst[*dstPos] = (byte)(0x0F & (Offset >> 0x08));
                     length = Length - Byte3_Additional_Length;
-                    dst[*pos + 0x02] = (byte)length;
-                    *pos += 0x03;
+                    dst[*dstPos + 0x02] = (byte)length;
+                    *dstPos += 0x03;
                     return Length;
                 }
 
                 length = Length - Byte2_Additional_Length;
-                dst[*pos] = (byte)((0xF0 & (length << 0x04)) | (0x0F & (Offset >> 0x08)));
-                *pos += 0x02;
+                dst[*dstPos] = (byte)((0xF0 & (length << 0x04)) | (0x0F & (Offset >> 0x08)));
+                *dstPos += 0x02;
                 return Length;
             }
 
             *flag |= 0b1000_0000 >> writeFlagCount;
-            dst[*pos] = src[srcPos];
-            *pos += 1;
+            dst[*dstPos] = src[srcPos];
+            *dstPos += 1;
             return 0x01;
         }
 
