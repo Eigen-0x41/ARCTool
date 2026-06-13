@@ -13,7 +13,6 @@ internal unsafe class Yaz0Encode
 
     private const int Max_Dictionary_Offset = 0x0FFF;
 
-    // 改善点1: struct に変更してスタック上に配置。GCの負担を完全にゼロにする。
     private struct Unit
     {
         public int Length;
@@ -39,14 +38,7 @@ internal unsafe class Yaz0Encode
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void Init()
-        {
-            Length = 1;
-            Offset = 0;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public int Write(int* flag, int writeFlagCount, byte* dst, long* pos, byte* src, in long srcPos)
+        public int Write(int* flag, int writeFlagCount, byte* dst, int* pos, byte* src, in int srcPos)
         {
             if (Length > Byte2_Additional_Length)
             {
@@ -73,65 +65,61 @@ internal unsafe class Yaz0Encode
             *pos += 1;
             return 0x01;
         }
-    }
 
-    // 改善点2: ref struct を使うことで無駄なコピーを避ける
-    // 改善点3: 不正なOffsetの計算バグを修正
-    private unsafe void GenUnit(ref Unit dst, byte* data, long size, long pos)
-    {
-        dst.Init();
-        if (pos >= size) return;
-
-        long maxCompSize = (size - pos < Byte3_Max_Dictionary_Length)
-                               ? size - pos
-                               : Byte3_Max_Dictionary_Length;
-
-        long startDictPos = (pos > Max_Dictionary_Offset)
-                                ? pos - Max_Dictionary_Offset
-                                : 0;
-
-        int bestLength = 1;
-        int bestOffset = 0;
-
-        // 全探索ループの最適化（インクリメントとポインタ演算の効率化）
-        for (long dictPos = startDictPos; dictPos < pos; dictPos++)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void Init(byte* data, int size, int pos)
         {
-            // 早期リジェクション：先頭文字と、現在見つかっている最大長の先の文字が一致しないならパス
-            // これだけで無駄な深追いをかなり減らせる
-            if (data[dictPos] != data[pos] || data[dictPos + bestLength - 1] != data[pos + bestLength - 1])
-                continue;
+            Length = 2;
+            Offset = 0;
 
-            int length = 0;
-            while (length < maxCompSize && data[dictPos + length] == data[pos + length])
+            if (pos >= size) return;
+
+            int maxCompSize = (size - pos < Byte3_Max_Dictionary_Length)
+                                   ? size - pos
+                                   : Byte3_Max_Dictionary_Length;
+
+            int startDictPos = (pos > Max_Dictionary_Offset)
+                                    ? (pos - 1) - Max_Dictionary_Offset
+                                    : 0;
+
+            for (int dictPos = startDictPos; dictPos < pos; dictPos++)
             {
-                length++;
+                // 早期リジェクション：先頭文字と、現在見つかっている最大長の先の文字が一致しないならパス
+                if (data[dictPos] != data[pos] || data[dictPos + Length - 1] != data[pos + Length - 1])
+                    continue;
+
+                int length = 0;
+                while (length < maxCompSize && data[dictPos + length] == data[pos + length])
+                {
+                    length++;
+                }
+
+                if (length > Length)
+                {
+                    Length = length;
+                    Offset = dictPos;
+
+                    if (length == maxCompSize)
+                        break;
+                }
             }
 
-            if (length > bestLength)
-            {
-                bestLength = length;
-                // ここで「相対距離」を計算して保持する（0から始まる値、1文字前なら0）
-                bestOffset = (int)((pos - 1) - dictPos);
-
-                if (length == maxCompSize)
-                    break;
-            }
+            // ここで「相対距離」を計算して保持する（0から始まる値、1文字前なら0）
+            Offset = (pos - 1) - Offset;
         }
 
-        dst.Length = bestLength;
-        dst.Offset = bestOffset;
     }
 
-    private unsafe long Encode(byte* dst, byte* src, long size)
+
+    private unsafe int Encode(byte* dst, byte* src, int size)
     {
-        long dstPos = 0;
-        long srcPos = 0;
+        int dstPos = 0;
+        int srcPos = 0;
 
         int flag = 0x00;
-        long flagPos = dstPos;
+        int flagPos = dstPos;
         int writeFlagCount = 7;
 
-        // クラスのフィールド経由ではなく、完全にスタック上のローカル変数にする
         Unit currentUnit = default;
         Unit nextUnit = default;
         bool isNextUnitValid = false;
@@ -150,16 +138,14 @@ internal unsafe class Yaz0Encode
 
             if (isNextUnitValid)
             {
-                // 改善点4: C#の最適化されたタプル置換。
-                // 内部的にはレジスタの入れ替え、あるいは構造体のシャローコピーになり、フィールドアクセスより遥かに速い。
                 (currentUnit, nextUnit) = (nextUnit, currentUnit);
             }
             else
             {
-                GenUnit(ref currentUnit, src, size, srcPos);
+                currentUnit.Init(src, size, srcPos);
             }
 
-            GenUnit(ref nextUnit, src, size, srcPos + 1);
+            nextUnit.Init(src, size, srcPos + 1);
 
             isNextUnitValid = nextUnit.Score(1) > currentUnit.Score(0);
             if (isNextUnitValid)
@@ -181,18 +167,18 @@ internal unsafe class Yaz0Encode
 
     public void Encode(BinaryWriter bw, BinaryReader br)
     {
-        long srcLength = br.BaseStream.Length;
+        int srcLength = (int)br.BaseStream.Length;
         if (srcLength == 0) return;
 
         var src = new byte[srcLength];
         var dst = new byte[srcLength * 2]; // 念のためのオーバーフロー防止
         br.Read(src);
 
-        long dstSize = 0;
+        int dstSize = 0;
 
         fixed (byte* pDst = dst, pSrc = src)
             dstSize = Encode(pDst, pSrc, srcLength);
 
-        bw.Write(dst, 0, (int)dstSize);
+        bw.Write(dst, 0, dstSize);
     }
 }
